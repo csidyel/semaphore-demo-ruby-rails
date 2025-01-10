@@ -21,7 +21,7 @@ global_job_config:
       - sem-version ruby 3.2.4
       - sem-version node 20.11.0
       - cache restore
-      - bundle install --path vendor/bundle
+      - bundle install --deployment --path vendor/bundle
 blocks:
   - name: "\U0001F527 Setup and Cache"
     task:
