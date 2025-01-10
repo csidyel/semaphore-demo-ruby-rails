@@ -46,9 +46,13 @@ group :development, :test do
   gem 'rubocop-rspec'
   gem 'next_rails'
 
-  # be able to demonstrate mysql config on Semaphore
+  # Be able to demonstrate mysql config on Semaphore
   gem 'mysql2', '~> 0.5.2'
   gem "rspec_junit_formatter"
+  
+  # Add bundler-audit and ruby_audit for auditing dependencies
+  gem 'bundler-audit', require: false
+  gem 'ruby_audit', require: false
 end
 
 group :development do
