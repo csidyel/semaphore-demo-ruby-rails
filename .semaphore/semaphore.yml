@@ -16,12 +16,12 @@ global_job_config:
   prologue:
     commands:
       - checkout
-      - sem-service start postgres 17      
+      - sem-service start postgres 17
       - sem-service start redis 5
       - sem-version ruby 3.2.4
       - sem-version node 20.11.0
       - cache restore
-      - bundle install --deployment --path vendor/bundle
+      - bundle install --path vendor/bundle
 blocks:
   - name: "\U0001F527 Setup and Cache"
     task:
