@@ -1,88 +1,91 @@
 version: v1.0
-name: Demo Rails 6 app
+name: "\U0001F48E Ruby CI Pipeline"
 agent:
   machine:
-    type: e1-standard-2
-    os_image: ubuntu2004
+    type: f1-standard-2
+    os_image: ubuntu2204
+fail_fast:
+  stop:
+    when: branch != 'master'
+auto_cancel:
+  running:
+    when: branch != 'master'
+  queued:
+    when: branch = 'master'
+global_job_config:
+  prologue:
+    commands:
+      - checkout
+      - sem-service start postgres 17      
+      - sem-service start redis 5
+      - sem-version ruby 3.2.4
+      - sem-version node 20.11.0
+      - cache restore
+      - bundle install --deployment --path vendor/bundle
 blocks:
-  - name: Setup
+  - name: "\U0001F527 Setup and Cache"
+    task:
+      jobs:
+        - name: Install Dependencies
+          commands:
+            - cache store
     dependencies: []
+  - name: "\U0001F9F9 Run RuboCop"
     task:
       jobs:
-        - name: bundle
+        - name: bundle exec rubocop
           commands:
-            - sem-version ruby 2.7.3
-            - sem-version node 14.16.1
-            - checkout
-            - cache restore
-            - bundle install
-            - cache store
-  - name: Code scanning
-    dependencies:
-      - Setup
-    task:
-      jobs:
-        - name: check style + security
-          commands:
-            - sem-version ruby 2.7.3
-            - sem-version node 14.16.1
-            - checkout
-            - cache restore
-            - bundle install
-            - cache store
             - bundle exec rubocop
-            - bundle exec brakeman
-  - name: Unit tests
     dependencies:
-      - Code scanning
+      - "\U0001F527 Setup and Cache"
+  - name: "\U0001F6E1️ Run Brakeman"
     task:
-      prologue:
-        commands:
-          - sem-version ruby 2.7.3
-          - sem-version node 14.16.1
-          - checkout
-          - cache restore
-          - bundle install
-          - cache store
-          - sem-service start postgres
-          - 'bundle exec rake db:setup'
       jobs:
-        - name: RSpec - model tests
+        - name: bundle exec brakeman --force
           commands:
-            - bundle exec rspec spec/models
-        - name: RSpec - controller tests
-          commands:
-            - bundle exec rspec spec/controllers
-      epilogue:
-        always:
-          commands:
-            - "[[ -f junit.xml ]] && test-results publish --name \"🧪 Unit tests\" junit.xml"
-  - name: Integration tests
+            - bundle exec brakeman --force
     dependencies:
-      - Unit tests
+      - "\U0001F527 Setup and Cache"
+  - name: "\U0001F50D Run Bundler Audit"
     task:
-      prologue:
-        commands:
-          - sem-version ruby 2.7.3
-          - sem-version node 14.16.1
-          - checkout
-          - cache restore
-          - bundle install
-          - cache store
       jobs:
-        - name: RSpec - feature specs
+        - name: bundle exec bundle-audit check --update
           commands:
-            - sem-service start postgres
+            - bundle exec bundle-audit check --update
+    dependencies:
+      - "\U0001F527 Setup and Cache"
+  - name: "\U0001F6A6 Test Suite"
+    task:
+      env_vars:
+        - name: RAILS_ENV
+          value: test
+        - name: PGHOST
+          value: 127.0.0.1
+        - name: PGUSER
+          value: postgres
+        - name: KNAPSACK_TEST_FILE_PATTERN
+          value: 'spec/**{,/*/**}/*_spec.rb'
+        - name: KNAPSACK_REPORT_PATH
+          value: knapsack_rspec_rails_report.json
+      jobs:
+        - name: "\U0001F7E2 RSpec Tests "
+          parallelism: 5
+          commands:
             - 'bundle exec rake db:setup'
-            - bundle exec rspec spec/features
+            - 'CI_NODE_TOTAL=$SEMAPHORE_JOB_COUNT CI_NODE_INDEX=$((SEMAPHORE_JOB_INDEX-1)) bundle exec rake "knapsack:rspec[-t ~manual -t ~v4 --format RspecJunitFormatter --out report.xml --format documentation]"'
+      secrets:
+        - name: KNAPSACK_PRO_TEST_SUITE_TOKEN_RSPEC
       epilogue:
         always:
           commands:
-            - "[[ -f junit.xml ]] && test-results publish --name \"🏗️ Integration tests\" junit.xml"
-
+            - '[[ -f report.xml ]] && test-results publish report.xml'
+    dependencies:
+      - "\U0001F50D Run Bundler Audit"
+      - "\U0001F6E1️ Run Brakeman"
+      - "\U0001F9F9 Run RuboCop"
 after_pipeline:
   task:
     jobs:
-      - name: Publish Results
+      - name: "Merge Reports \U0001F4CA"
         commands:
           - test-results gen-pipeline-report
